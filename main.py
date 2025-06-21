@@ -2,11 +2,9 @@ import streamlit as st
 import google.generativeai as genai
 from gtts import gTTS
 import os
-import speech_recognition as sr
 from dotenv import load_dotenv
-import time
-import cv2
 from PIL import Image
+import io
 
 # Çevresel değişkenleri yükle
 load_dotenv()
@@ -18,25 +16,6 @@ if not google_api_key:
 # Gemini API yapılandırması
 genai.configure(api_key=google_api_key)
 model = genai.GenerativeModel('gemini-1.5-flash-latest')
-
-# 🎤 **Mikrofondan ses al ve metne çevir**
-def ses_kayit(device_index=0):
-    r = sr.Recognizer()
-    with sr.Microphone(device_index=device_index) as source:
-        st.info("Konuşabilirsiniz...")
-        r.adjust_for_ambient_noise(source)  # Ortam gürültüsünü ayarlar
-        audio = r.listen(source, timeout=5)  # Maksimum 5 saniye dinler
-
-    try:
-        text = r.recognize_google(audio, language='tr-TR')
-        st.success(f"Algılanan metin: {text}")
-        return text
-    except sr.UnknownValueError:
-        st.error("Ses anlaşılamadı, lütfen tekrar deneyin.")
-        return None
-    except sr.RequestError:
-        st.error("Ses tanıma hizmetine ulaşılamadı.")
-        return None
 
 # 🔊 **Metni seslendir**
 def seslendir(text):
@@ -50,30 +29,8 @@ def seslendir(text):
             st.audio(audio_file.read(), format="audio/mp3")
 
         os.remove(file_path)
-
     except Exception as e:
         st.error(f"Seslendirme hatası: {e}")
-
-# 📷 **Kameradan görüntü yakala ve uyarı ver**
-def capture_image(camera_index=0):
-    cap = cv2.VideoCapture(camera_index)
-    if not cap.isOpened():
-        st.error(f"Kamera {camera_index} açılamadı.")
-        seslendir(f"Kamera {camera_index} açılamadı.")
-        cap.release()
-        return None
-    
-    ret, frame = cap.read()
-    if ret:
-        image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-        cap.release()
-        st.success("Resim yakalandı!")
-        seslendir("Resim yakalandı!")
-        return image
-    cap.release()
-    st.error("Görüntü yakalanamadı.")
-    seslendir("Görüntü yakalanamadı.")
-    return None
 
 # 🤖 **Gemini modeline soru sor ve cevap al**
 def gemini_cevapla(input_text, image=None):
@@ -97,47 +54,40 @@ def gemini_cevapla(input_text, image=None):
 # 📌 **Streamlit UI**
 st.title("🎙️ Sesli ve Görüntülü Chatbot")
 
-# Sidebar ile cihaz seçimi
-with st.sidebar:
-    camera_options = [f"Kamera {i}" for i in range(3)]  # Basit bir liste
-    selected_camera = st.selectbox("Kamera Seç", camera_options, index=0)
-    camera_index = int(selected_camera.split()[1])
+st.markdown("""
+- Kameradan fotoğraf çekmek için aşağıdaki butonu kullan.
+- Dilersen ses dosyası da yükleyebilirsin (opsiyonel).
+""")
 
-    mic_options = [f"Mikrofon {i}" for i in range(3)]  # Basit bir liste
-    selected_mic = st.selectbox("Mikrofon Seç", mic_options, index=0)
-    mic_index = int(selected_mic.split()[1])
+# Kamera inputu
+captured_image = st.camera_input("Kameradan Fotoğraf Çek (tarayıcınızdan izin vermelisiniz)")
 
-# Butonlar ve UI
-col1, col2, col3 = st.columns(3)
-with col1:
-    if st.button("📷 Görüntü Yakala"):
-        image = capture_image(camera_index)
-        if image:
-            st.session_state['captured_image'] = image
-            st.image(image, caption="Yakalanan Görüntü")
-
-with col2:
-    if st.button("🎙️ Mikrofonla Konuş"):
-        ses_metni = ses_kayit(mic_index)
-        if ses_metni:
-            st.session_state['prompt'] = ses_metni
-            if 'captured_image' in st.session_state:
-                gemini_cevapla(ses_metni, st.session_state['captured_image'])
-            else:
-                gemini_cevapla(ses_metni)
-
-with col3:
-    if st.button("✉️ Gönder"):
-        if 'prompt' in st.session_state and st.session_state['prompt'].strip():
-            if 'captured_image' in st.session_state:
-                gemini_cevapla(st.session_state['prompt'], st.session_state['captured_image'])
-            else:
-                gemini_cevapla(st.session_state['prompt'])
+# Ses dosyası yükleme (isteğe bağlı)
+uploaded_audio = st.file_uploader("Bir ses dosyası yükleyin (opsiyonel, .wav/.mp3)", type=["wav", "mp3"])
 
 # Yazılı giriş kutusu
 kullanici_girdisi = st.text_input("Sorunuzu yazın:", placeholder="Buraya yazabilirsiniz...")
-if kullanici_girdisi.strip():
-    st.session_state['prompt'] = kullanici_girdisi
 
-if 'captured_image' in st.session_state:
-    st.image(st.session_state['captured_image'], caption="Yakalanan Görüntü")
+# Butonlar ve UI
+col1, col2 = st.columns(2)
+
+with col1:
+    if st.button("✉️ Gönder"):
+        if kullanici_girdisi.strip():
+            img = None
+            if captured_image is not None:
+                # Streamlit image objesini PIL Image objesine çevir
+                img = Image.open(captured_image)
+            yanit = gemini_cevapla(kullanici_girdisi, img)
+        else:
+            st.warning("Lütfen bir soru/metin girin.")
+
+with col2:
+    if uploaded_audio is not None:
+        st.audio(uploaded_audio, format="audio/wav")
+        st.info("Ses dosyası başarıyla yüklendi. (Otomatik çözümleme için ek kod eklenebilir.)")
+
+# Yakalanan fotoğrafı göster
+if captured_image is not None:
+    st.image(captured_image, caption="Yakalanan Görüntü")
+
