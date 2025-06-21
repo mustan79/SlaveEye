@@ -74,7 +74,6 @@ py-cpuinfo==9.0.0
 pyarrow==19.0.0
 pyasn1==0.6.1
 pyasn1_modules==0.4.1
-PyAudio==0.2.14
 pycparser==2.22
 pycurl==7.45.4
 pydantic==2.10.6
