@@ -3,7 +3,6 @@ import google.generativeai as genai
 from gtts import gTTS
 import os
 import speech_recognition as sr
-import pygame
 from dotenv import load_dotenv
 import time
 import cv2
@@ -46,15 +45,10 @@ def seslendir(text):
         file_path = "yanit.mp3"
         tts.save(file_path)
 
-        pygame.mixer.init()
-        pygame.mixer.music.load(file_path)
-        pygame.mixer.music.play()
+        # Streamlit ile mp3 dosyasını oynat
+        with open(file_path, "rb") as audio_file:
+            st.audio(audio_file.read(), format="audio/mp3")
 
-        while pygame.mixer.music.get_busy():
-            time.sleep(0.1)
-
-        pygame.mixer.music.stop()
-        pygame.mixer.quit()
         os.remove(file_path)
 
     except Exception as e:
