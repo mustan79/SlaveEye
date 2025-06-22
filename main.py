@@ -8,7 +8,7 @@ import io
 
 # Çevresel değişkenleri yükle
 load_dotenv()
-google_api_key = os.getenv("GEMINI_API_KEY")
+google_api_key = st.secrets.get("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
 if not google_api_key:
     st.error("Google API Key bulunamadı. Lütfen .env dosyanızı kontrol edin.")
     st.stop()
