@@ -5,6 +5,7 @@ import os
 from dotenv import load_dotenv
 from PIL import Image
 import io
+import base64  # Resimleri base64'e çevirmek için
 
 # Çevresel değişkenleri yükle
 load_dotenv()
@@ -16,6 +17,9 @@ if not google_api_key:
 # Gemini API yapılandırması
 genai.configure(api_key=google_api_key)
 model = genai.GenerativeModel('gemini-1.5-flash-latest')
+
+# Global değişkenler
+son_cekilen_resim = None  # Son çekilen resmi saklamak için
 
 # 🔊 **Metni seslendir**
 def seslendir(text):
@@ -35,13 +39,17 @@ def seslendir(text):
 # 🤖 **Gemini modeline soru sor ve cevap al**
 def gemini_cevapla(input_text, image=None):
     try:
+        contents = []
         if image:
             st.info("Görüntü ve metin Gemini’ye gönderiliyor...")
-            response = model.generate_content([input_text, image])
+            contents.append(image)
+            contents.append(input_text)
             st.success("Görüntü ve metin başarıyla gönderildi.")
         else:
             st.info("Sadece metin Gemini’ye gönderiliyor...")
-            response = model.generate_content(input_text)
+            contents.append(input_text)
+
+        response = model.generate_content(contents)
         yanit = response.text
         st.text_area("Gemini Yanıtı", yanit)
         seslendir(yanit)
@@ -52,42 +60,29 @@ def gemini_cevapla(input_text, image=None):
         return None
 
 # 📌 **Streamlit UI**
-st.title("🎙️ Sesli ve Görüntülü Chatbot")
+st.title("📸 Akıllı Asistan")
 
-st.markdown("""
-- Kameradan fotoğraf çekmek için aşağıdaki butonu kullan.
-- Dilersen ses dosyası da yükleyebilirsin (opsiyonel).
-""")
+# Kamera seçimi (Mobil için)
+kamera_secimi = st.radio("Kamera Seçimi:", ("Arka Kamera", "Ön Kamera"))
 
-# Kamera inputu
-captured_image = st.camera_input("Kameradan Fotoğraf Çek (tarayıcınızdan izin vermelisiniz)")
+# Resim çekme butonu
+captured_image = st.camera_input("2. Resim Çek",key="kalici_resim")
+if captured_image:
+    son_cekilen_resim = Image.open(captured_image) # PIL Image objesine çevir
+    st.image(captured_image, caption="Çekilen Resim", use_column_width=True)
 
-# Ses dosyası yükleme (isteğe bağlı)
-uploaded_audio = st.file_uploader("Bir ses dosyası yükleyin (opsiyonel, .wav/.mp3)", type=["wav", "mp3"])
+   # Resmi Gemini'ye gönder
+    prompt = "Bu resimde neler görüyorsun anlat."
+    gemini_cevapla(prompt, son_cekilen_resim)
 
-# Yazılı giriş kutusu
-kullanici_girdisi = st.text_input("Sorunuzu yazın:", placeholder="Buraya yazabilirsiniz...")
-
-# Butonlar ve UI
-col1, col2 = st.columns(2)
-
-with col1:
-    if st.button("✉️ Gönder"):
-        if kullanici_girdisi.strip():
-            img = None
-            if captured_image is not None:
-                # Streamlit image objesini PIL Image objesine çevir
-                img = Image.open(captured_image)
-            yanit = gemini_cevapla(kullanici_girdisi, img)
+# Yazılı giriş
+kullanici_girdisi = st.text_input("3. Yazılı Prompt:", placeholder="Buraya yazın...")
+if st.button("Gönder ✉️"):
+    if kullanici_girdisi:
+        # Eğer son çekilen resim varsa, resimle beraber gönder
+        if son_cekilen_resim:
+            gemini_cevapla(kullanici_girdisi, son_cekilen_resim)
         else:
-            st.warning("Lütfen bir soru/metin girin.")
-
-with col2:
-    if uploaded_audio is not None:
-        st.audio(uploaded_audio, format="audio/wav")
-        st.info("Ses dosyası başarıyla yüklendi. (Otomatik çözümleme için ek kod eklenebilir.)")
-
-# Yakalanan fotoğrafı göster
-if captured_image is not None:
-    st.image(captured_image, caption="Yakalanan Görüntü")
-
+            gemini_cevapla(kullanici_girdisi)
+    else:
+        st.warning("Lütfen bir şeyler yazın.")
