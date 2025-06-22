@@ -69,7 +69,7 @@ kamera_secimi = st.radio("Kamera Seçimi:", ("Arka Kamera", "Ön Kamera"))
 captured_image = st.camera_input("2. Resim Çek",key="kalici_resim")
 if captured_image:
     son_cekilen_resim = Image.open(captured_image) # PIL Image objesine çevir
-    st.image(captured_image, caption="Çekilen Resim", use_column_width=True)
+#    st.image(captured_image, caption="Çekilen Resim", use_column_width=True)
 
    # Resmi Gemini'ye gönder
     prompt = "Bu resimde neler görüyorsun anlat."
