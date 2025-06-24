@@ -51,8 +51,6 @@ def gemini_cevapla(input_text, image=None):
 
         response = model.generate_content(contents)
         yanit = response.text
-        st.text_area("Gemini Yanıtı", yanit)
-        seslendir(yanit)
         return yanit
     except Exception as e:
         st.error(f"Gemini API hatası: {e}")
@@ -69,11 +67,13 @@ kamera_secimi = st.radio("Kamera Seçimi:", ("Arka Kamera", "Ön Kamera"))
 captured_image = st.camera_input("2. Resim Çek",key="kalici_resim")
 if captured_image:
     son_cekilen_resim = Image.open(captured_image) # PIL Image objesine çevir
-#    st.image(captured_image, caption="Çekilen Resim", use_column_width=True)
+    st.image(captured_image, caption="Çekilen Resim", use_column_width=True)
 
    # Resmi Gemini'ye gönder
     prompt = "Bu resimde neler görüyorsun anlat."
-    gemini_cevapla(prompt, son_cekilen_resim)
+    yanit = gemini_cevapla(prompt, son_cekilen_resim)
+    st.text_area("Gemini Yanıtı", yanit)
+    seslendir(yanit)
 
 # Yazılı giriş
 kullanici_girdisi = st.text_input("3. Yazılı Prompt:", placeholder="Buraya yazın...")
@@ -81,8 +81,12 @@ if st.button("Gönder ✉️"):
     if kullanici_girdisi:
         # Eğer son çekilen resim varsa, resimle beraber gönder
         if son_cekilen_resim:
-            gemini_cevapla(kullanici_girdisi, son_cekilen_resim)
+            yanit = gemini_cevapla(kullanici_girdisi, son_cekilen_resim)
+            st.text_area("Gemini Yanıtı", yanit)
+            seslendir(yanit)
         else:
-            gemini_cevapla(kullanici_girdisi)
+            yanit = gemini_cevapla(kullanici_girdisi)
+            st.text_area("Gemini Yanıtı", yanit)
+            seslendir(yanit)
     else:
         st.warning("Lütfen bir şeyler yazın.")
