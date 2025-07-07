@@ -4,12 +4,13 @@ import os
 from dotenv import load_dotenv
 from PIL import Image
 import io
+import base64
 
 # CSS yükle
 with open("style.css") as f:
     st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
-st.title("📸 Akıllı Asistan (Tarayıcıda Sesli)")
+st.title("📸 Akıllı Sesli Asistan")
 
 # Çevresel değişkenleri yükle
 load_dotenv()
@@ -22,34 +23,17 @@ if not google_api_key:
 genai.configure(api_key=google_api_key)
 model = genai.GenerativeModel('gemini-1.5-flash-latest')
 
-# Global değişkenler
-son_cekilen_resim = None
+# ======= Kamera seçimi =======
+kamera_secimi = st.radio("Kamera Seçimi:", ("Arka Kamera", "Ön Kamera"))
 
-# 🤖 Gemini modeline soru sor ve cevap al
-def gemini_cevapla(input_text, image=None):
-    try:
-        contents = []
-        if image:
-            st.info("Görüntü ve metin Gemini’ye gönderiliyor...")
-            contents.append(image)
-            contents.append(input_text)
-            st.success("Görüntü ve metin başarıyla gönderildi.")
-        else:
-            st.info("Sadece metin Gemini’ye gönderiliyor...")
-            contents.append(input_text)
+# ======= Bilgilendirme mesajı =======
+info_area = st.empty()
 
-        response = model.generate_content(contents)
-        yanit = response.text
-        return yanit
-    except Exception as e:
-        st.error(f"Gemini API hatası: {e}")
-        return None
-
-# ======= TARAYICI MİKROFON - SES TO TEXT =======
+# ======= Mikrofon HTML ve JS (yalnızca sesli giriş, erişilebilir) =======
 mic_html = """
 <div>
-  <button class="big-button" id="start-record">🎤 Mikrofondan Konuş</button>
-  <p id="mic-result" style="font-weight:bold; font-size:1.2em"></p>
+  <button class="big-button" id="start-record" style="width:100%;font-size:2em;">🎤 Konuşmak için tıkla</button>
+  <p id="mic-result" style="font-weight:bold; font-size:1.3em"></p>
 </div>
 <script>
   const btn = document.getElementById('start-record');
@@ -69,14 +53,17 @@ mic_html = """
     recognition.onresult = (e) => {
       let text = e.results[0][0].transcript;
       result.innerText = text;
-      // Streamlit yazılı inputa otomatik aktarım için:
-      window.parent.postMessage({isStreamlitMessage: true, type: "streamlit:setComponentValue", data: text}, "*");
-      btn.innerText = "🎤 Mikrofondan Konuş";
+      // Streamlit'e aktar
+      window.parent.postMessage(
+        {isStreamlitMessage: true, type: "streamlit:setComponentValue", data: text},
+        "*"
+      );
+      btn.innerText = "🎤 Konuşmak için tıkla";
     };
 
     recognition.onerror = (e) => {
       result.innerText = "Hata: " + e.error;
-      btn.innerText = "🎤 Mikrofondan Konuş";
+      btn.innerText = "🎤 Konuşmak için tıkla";
     };
   } else {
     result.innerText = "Tarayıcı mikrofon desteği yok!";
@@ -85,62 +72,71 @@ mic_html = """
 </script>
 """
 
-mic_text = st.components.v1.html(mic_html, height=200)
+mic_text = st.components.v1.html(mic_html, height=220)
 
-# ======= UI =======
-# Kamera seçimi (Mobil için)
-kamera_secimi = st.radio("Kamera Seçimi:", ("Arka Kamera", "Ön Kamera"))
+# ======= Arka planda fotoğraf çekme =======
+# Kamera inputu ekranda görünmeden, sadece dosya olarak alınacak
 
-# Resim çekme butonu
-captured_image = st.camera_input("2. Resim Çek",key="kalici_resim")
-if captured_image:
-    son_cekilen_resim = Image.open(captured_image)
-    st.image(captured_image, caption="Çekilen Resim", use_column_width=True)
-    prompt = "Bu resimde neler görüyorsun anlat."
-    yanit = gemini_cevapla(prompt, son_cekilen_resim)
-    if yanit:
-        st.text_area("Gemini Yanıtı", yanit, key="yanit_1", height=150, help="Aşağıdan yanıtı sesli dinleyebilirsiniz.")
-        # Yanıtı sesli okutma butonu
-        speak_html = f"""
-        <button class="big-button" onclick="window.speechSynthesis.speak(new SpeechSynthesisUtterance('{yanit.replace("'", "").replace("\\n", " ")}'));">
-        🔊 Yanıtı Sesli Oku
-        </button>
-        """
-        st.components.v1.html(speak_html, height=80)
-
-# Yazılı giriş
-st.markdown("### 3. Yazılı Prompt:")
-col1, col2 = st.columns([2,1])
-with col1:
-    kullanici_girdisi = st.text_input(
-        "Prompt:",
-        placeholder="Buraya yazın ya da yukarıdan mikrofonla konuşun...",
-        key="kullanici_girdisi"
-    )
-with col2:
-    st.markdown("Mikrofondan aldığınız metin otomatik buraya gelir.")
-
-gonder = st.button("Gönder ✉️", key="gonder_btn")
-if gonder and kullanici_girdisi:
-    if son_cekilen_resim:
-        yanit = gemini_cevapla(kullanici_girdisi, son_cekilen_resim)
-    else:
-        yanit = gemini_cevapla(kullanici_girdisi)
-    if yanit:
-        st.text_area("Gemini Yanıtı", yanit, key="yanit_2", height=150)
-        # Yanıtı sesli okutma butonu
-        speak_html = f"""
-        <button class="big-button" onclick="window.speechSynthesis.speak(new SpeechSynthesisUtterance('{yanit.replace("'", "").replace("\\n", " ")}'));">
-        🔊 Yanıtı Sesli Oku
-        </button>
-        """
-        st.components.v1.html(speak_html, height=80)
-elif gonder:
-    st.warning("Lütfen bir şeyler yazın.")
-
-# Kullanıcıya bilgi notu
-st.info(
-    "🗣️ Mikrofondan konuşmak için yukarıdaki butonu kullan. "
-    "Cevabı sesli dinlemek için 'Yanıtı Sesli Oku'ya tıkla. "
-    "Sunucu tarafında değil, tamamen tarayıcıda çalışır."
+st.markdown(
+    '<div style="display:flex;justify-content:center;margin:1em 0;">'
+    '<span style="font-size:1.2em;font-weight:bold;">'
+    '📷 Fotoğraf çekmek için aşağıdaki büyük butona tıkla'
+    '</span></div>',
+    unsafe_allow_html=True
 )
+
+# Büyük, erişilebilir resim çekme butonu
+capture_col = st.columns([1, 8, 1])
+with capture_col[1]:
+    # Kamera inputu sadece dosya olarak alınıyor, ekranda görüntü yok
+    capture_btn = st.camera_input(
+        "", key="kalici_resim", label_visibility="collapsed"
+    )
+
+# ======= Sadece sesli prompt =======
+# Yazılı giriş KAPALI, sadece mikrofondan alınacak
+if 'mic_text' in locals() and mic_text:
+    prompt = mic_text
+else:
+    prompt = None
+
+# ======= Resim ve prompt alınırsa modele gönder =======
+yanit = None
+if capture_btn:
+    try:
+        img = Image.open(capture_btn)
+        # Bilgilendirme: fotoğraf çekildi
+        info_area.info("🟢 Fotoğraf alındı, modele gönderiliyor...")
+        # Mikrofondan prompt yoksa varsayılan
+        prompt_text = st.session_state.get("component_value") or "Bu resimde neler var?"
+        yanit = model.generate_content([img, prompt_text]).text
+        info_area.success("✅ Yanıt alındı, seslendiriliyor...")
+        # Gemini yanıtını ekrana yaz
+        st.markdown(
+            f"<div style='font-size:1.2em;line-height:1.5;' aria-live='polite'>{yanit}</div>",
+            unsafe_allow_html=True
+        )
+        # Gemini yanıtını otomatik seslendir (JS)
+        speak_html = f"""
+        <script>
+        var msg = new SpeechSynthesisUtterance({yanit!r});
+        msg.lang = 'tr-TR';
+        window.speechSynthesis.speak(msg);
+        </script>
+        """
+        st.components.v1.html(speak_html, height=0)
+    except Exception as e:
+        info_area.error(f"❌ Hata: {e}")
+
+# ======= Sonrası için bilgi mesajı =======
+st.info("🔵 Mikrofondan konuş, büyük butonla fotoğraf çek, yanıtı otomatik dinle. "
+        "Yazılı giriş yok. En iyi deneyim için ekran okuyucu ile kullanabilirsin.")
+
+# Ek erişilebilirlik için: tuşlarla gezilebilir büyük butonlar
+st.markdown("""
+<style>
+.big-button:focus {
+    outline: 3px solid #FFD700;
+}
+</style>
+""", unsafe_allow_html=True)
