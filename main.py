@@ -47,7 +47,7 @@ with col2:
 # --- Kamera ile tek tık akışı ---
 if foto_btn or st.session_state["step"] == "foto":
     st.session_state["step"] = "foto"
-    img_bytes = camera_input("Kamera ile fotoğraf çek", format="png")
+    img_bytes = st.camera_input("Kamera ile fotoğraf çek", format="png")
     if img_bytes:
         img = Image.open(img_bytes)
         speak("🟢 Modelden yanıt bekleniyor...")
@@ -98,7 +98,7 @@ if st.session_state["step"] == "mic":
         st.stop()
 
 if st.session_state["step"] == "mic_photo":
-    img_bytes = camera_input("Kamera ile fotoğraf çek", key="cam_input_mic", format="png")
+    img_bytes = st.camera_input("Kamera ile fotoğraf çek", key="cam_input_mic", format="png")
     if img_bytes and st.session_state["mic_prompt"]:
         img = Image.open(img_bytes)
         prompt = st.session_state["mic_prompt"]
