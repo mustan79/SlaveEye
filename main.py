@@ -1,5 +1,5 @@
 import streamlit as st
-from streamlit_camera_input import camera_input
+#from streamlit_camera_input_live import camera_input_live
 from PIL import Image
 import google.generativeai as genai
 

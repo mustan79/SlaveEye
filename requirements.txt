@@ -105,7 +105,7 @@ soupsieve==2.6
 SpeechRecognition==3.14.1
 stack-data==0.6.3
 streamlit==1.41.1
-streamlit-camera-input
+streamlit-camera-input-live
 streamlit-webrtc==0.47.9
 sympy==1.13.1
 tenacity==9.0.0
