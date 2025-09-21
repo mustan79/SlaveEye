@@ -84,6 +84,7 @@ pyee==12.1.1
 Pygments==2.19.1
 pylibsrtp==0.11.0
 pyOpenSSL==25.0.0
+pillow
 pyparsing==3.2.1
 python-dateutil==2.9.0.post0
 python-dotenv==1.0.1
@@ -104,6 +105,7 @@ soupsieve==2.6
 SpeechRecognition==3.14.1
 stack-data==0.6.3
 streamlit==1.41.1
+streamlit-camera-input
 streamlit-webrtc==0.47.9
 sympy==1.13.1
 tenacity==9.0.0

@@ -1,54 +1,28 @@
 import streamlit as st
-import google.generativeai as genai
-import os
-from dotenv import load_dotenv
+from streamlit_camera_input import camera_input
 from PIL import Image
-
-# --- CSS: Butonları büyük yap, kamera inputunu gizle ---
-st.markdown("""
-<style>
-    .big-btn {width:96vw; height:8vh; font-size:3em; margin:1vh 0;}
-    [data-testid="stCameraInput"] {display: none !important;}
-</style>
-""", unsafe_allow_html=True)
+import google.generativeai as genai
 
 st.title("🔊 Akıllı Sesli Asistan")
 
-# --- API Key Yükle ---
-load_dotenv()
-google_api_key = st.secrets.get("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
+# API anahtarı Streamlit secrets üzerinden alınır
+google_api_key = st.secrets.get("GEMINI_API_KEY")
 if not google_api_key:
-    st.error("Google API Key bulunamadı. Lütfen .env dosyanızı kontrol edin.")
+    st.error("Google API Key bulunamadı. Lütfen Streamlit secrets'a ekleyin.")
     st.stop()
 
 genai.configure(api_key=google_api_key)
-model = genai.GenerativeModel('gemini-1.5-flash-latest')
+model = genai.GenerativeModel('gemini-2.5-flash')
+
+st.markdown("""
+<style>
+    .big-btn {width:96vw; height:8vh; font-size:3em; margin:1vh 0;}
+</style>
+""", unsafe_allow_html=True)
 
 info_area = st.empty()
 
-# --- Session State Başlat ---
-for k, v in [
-    ("cekilen_resim", None),
-    ("mic_prompt", None),
-    ("step", None),
-    ("mic_listen", False),
-    ("mic_value", None)
-]:
-    if k not in st.session_state:
-        st.session_state[k] = v
-
-# --- Ana Butonlar ---
-col1, col2 = st.columns(2)
-with col1:
-    foto_btn = st.button("📷 Resim Çek", key="btn_foto", use_container_width=True)
-with col2:
-    mic_btn = st.button("🎤 Mikrofonla Sor", key="btn_mic", use_container_width=True)
-
-# --- Kamera Inputu (her zaman hazır, gizli) ---
-camera_file = st.camera_input("", key="cam_input", label_visibility="collapsed")
-
 def speak(text):
-    # Ekranda göster + sesli okut
     info_area.info(text)
     speak_html = f"""
     <script>
@@ -57,31 +31,39 @@ def speak(text):
     </script>"""
     st.components.v1.html(speak_html, height=0)
 
-# --- FOTOĞRAF ÇEKME AKIŞI ---
-if foto_btn:
-    st.session_state["step"] = "foto"
-    speak("Kamera açılıyor, lütfen fotoğraf çekin ve yükleyin.")
-    st.stop()
+if "step" not in st.session_state:
+    st.session_state["step"] = None
+if "mic_prompt" not in st.session_state:
+    st.session_state["mic_prompt"] = None
+if "component_value" not in st.session_state:
+    st.session_state["component_value"] = None
 
-if st.session_state["step"] == "foto" and camera_file:
-    try:
-        img = Image.open(camera_file)
-        st.session_state["cekilen_resim"] = img
+col1, col2 = st.columns(2)
+with col1:
+    foto_btn = st.button("📷 Resim Çek", use_container_width=True)
+with col2:
+    mic_btn = st.button("🎤 Mikrofonla Sor", use_container_width=True)
+
+# --- Kamera ile tek tık akışı ---
+if foto_btn or st.session_state["step"] == "foto":
+    st.session_state["step"] = "foto"
+    img_bytes = camera_input("Kamera ile fotoğraf çek", format="png")
+    if img_bytes:
+        img = Image.open(img_bytes)
         speak("🟢 Modelden yanıt bekleniyor...")
         yanit = model.generate_content([img, "Bu resimde neler var?"]).text
         speak("✅ Yanıt seslendiriliyor...")
         speak(yanit)
         st.session_state["step"] = None
-    except Exception as e:
-        speak(f"Hata: {e}")
-        st.session_state["step"] = None
+    st.stop()
 
-# --- MİKROFON AKIŞI ---
+# --- Mikrofon akışı ---
 if mic_btn:
     st.session_state["step"] = "mic"
-    st.session_state["mic_listen"] = True
+    st.session_state["mic_prompt"] = None
+    st.session_state["component_value"] = None
 
-if st.session_state.get("mic_listen"):
+if st.session_state["step"] == "mic":
     mic_html = """
     <div>
       <button class="big-btn" id="start-record">🎤 Konuşmaya Başla</button>
@@ -111,29 +93,25 @@ if st.session_state.get("mic_listen"):
     mic_value = st.session_state.get("component_value")
     if mic_value:
         st.session_state["mic_prompt"] = mic_value
-        st.session_state["mic_listen"] = False
         st.session_state["step"] = "mic_photo"
-        speak("Şimdi fotoğraf çekmeniz gerekiyor. Kamera açılıyor.")
+        speak("Şimdi kamera açılıyor ve fotoğraf çekilecek.")
         st.stop()
 
-# --- MİKROFON SONRASI FOTOĞRAF AKIŞI ---
-if st.session_state["step"] == "mic_photo" and camera_file:
-    try:
-        img = Image.open(camera_file)
-        st.session_state["cekilen_resim"] = img
-        prompt = st.session_state["mic_prompt"] or "Bu resimde neler var?"
+if st.session_state["step"] == "mic_photo":
+    img_bytes = camera_input("Kamera ile fotoğraf çek", key="cam_input_mic", format="png")
+    if img_bytes and st.session_state["mic_prompt"]:
+        img = Image.open(img_bytes)
+        prompt = st.session_state["mic_prompt"]
         speak("🟢 Modelden yanıt bekleniyor...")
         yanit = model.generate_content([img, prompt]).text
         speak("✅ Yanıt seslendiriliyor...")
         speak(yanit)
+        st.session_state["step"] = None
         st.session_state["mic_prompt"] = None
-        st.session_state["step"] = None
-    except Exception as e:
-        speak(f"Hata: {e}")
-        st.session_state["step"] = None
+    st.stop()
 
 st.info("""
-- 📷 **Resim Çek:** Kameradan fotoğraf çek, model yanıtını otomatik seslendirir.
-- 🎤 **Mikrofonla Sor:** Konuş, ardından fotoğraf çekmeni ister, ikisini birlikte modele yollar ve yanıtı seslendirir.
+- 📷 **Resim Çek:** Butona bir defa bastığında kamera açılır, fotoğraf çekilir, model yanıtı sesli olarak dinlettirilir.
+- 🎤 **Mikrofonla Sor:** Konuş, ardından fotoğraf çekmeni ister, ikisini modele yollar ve yanıtı seslendirir.
+- Tüm akışlar sade, tek tık ve sesli bildirimlidir.
 """)
-
