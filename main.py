@@ -51,12 +51,12 @@ if foto_btn or st.session_state["step"] == "foto":
     if resim:
         # Resmi PIL Image objesine çevir
         img = Image.open(resim)
-        speak("🟢 Modelden yanıt bekleniyor...")
+        speak("Modelden yanıt bekleniyor...")
         yanit = model.generate_content([img, "Bu resimde neler var?"]).text
         speak("✅ Yanıt seslendiriliyor...")
         speak(yanit)
         st.session_state["step"] = None
-    st.stop()
+#    st.stop()
 
 # --- Mikrofon akışı ---
 if mic_btn:
@@ -96,7 +96,7 @@ if st.session_state["step"] == "mic":
         st.session_state["mic_prompt"] = mic_value
         st.session_state["step"] = "mic_photo"
         speak("Şimdi kamera açılıyor ve fotoğraf çekilecek.")
-        st.stop()
+#        st.stop()
 
 if st.session_state["step"] == "mic_photo":
     img_bytes = st.camera_input("Kamera ile fotoğraf çek", key="cam_input_mic")
@@ -109,10 +109,11 @@ if st.session_state["step"] == "mic_photo":
         speak(yanit)
         st.session_state["step"] = None
         st.session_state["mic_prompt"] = None
-    st.stop()
+#    st.stop()
 
-st.info("""
-- 📷 **Resim Çek:** Butona bir defa bastığında kamera açılır, fotoğraf çekilir, model yanıtı sesli olarak dinlettirilir.
-- 🎤 **Mikrofonla Sor:** Konuş, ardından fotoğraf çekmeni ister, ikisini modele yollar ve yanıtı seslendirir.
-- Tüm akışlar sade, tek tık ve sesli bildirimlidir.
-""")
+#st.info("""
+#- 📷 **Resim Çek:** Butona bir defa bastığında kamera açılır, fotoğraf çekilir, model yanıtı sesli olarak dinlettirilir.
+#- 🎤 **Mikrofonla Sor:** Konuş, ardından fotoğraf çekmeni ister, ikisini modele yollar ve yanıtı seslendirir.
+#- Tüm akışlar sade, tek tık ve sesli bildirimlidir.
+#""")
+#
