@@ -1,24 +1,29 @@
 import streamlit as st
-from PIL import Image
 import google.generativeai as genai
+import os
+from dotenv import load_dotenv
+from PIL import Image
+import io
 
-st.title("🔊 Akıllı Sesli Asistan")
+# CSS yükle
+with open("style.css") as f:
+    st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
-# API anahtarı Streamlit secrets üzerinden alınır
-google_api_key = st.secrets.get("GEMINI_API_KEY")
+st.title("📸 Akıllı Asistan (Tarayıcıda Sesli)")
+
+# Çevresel değişkenleri yükle
+load_dotenv()
+google_api_key = st.secrets.get("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
 if not google_api_key:
-    st.error("Google API Key bulunamadı. Lütfen Streamlit secrets'a ekleyin.")
+    st.error("Google API Key bulunamadı. Lütfen .env dosyanızı kontrol edin.")
     st.stop()
 
+# Gemini API yapılandırması
 genai.configure(api_key=google_api_key)
 model = genai.GenerativeModel('gemini-2.5-flash')
 
-st.markdown("""
-<style>
-    .big-btn {width:96vw; height:8vh; font-size:3em; margin:1vh 0;}
-</style>
-""", unsafe_allow_html=True)
-
+# Global değişkenler
+son_cekilen_resim = None
 info_area = st.empty()
 
 def speak(text):
@@ -32,57 +37,49 @@ def speak(text):
 
 if "mic_prompt" not in st.session_state:
     st.session_state["mic_prompt"] = None
-#if "component_value" not in st.session_state:
-#    st.session_state["component_value"] = None # Artık gerekli değil
 mic_flag = False # Başlangıçta False olmalı
 
-resim = st.camera_input("Kamera ile fotoğraf çek")
-
-if resim:
-    # Resmi PIL Image objesine çevir
-    img = Image.open(resim)
-    speak("Modelden yanıt bekleniyor...")
-
-    prompt = st.session_state["mic_prompt"] if mic_flag else "Bu resimde neler var?"
-
-    yanit = model.generate_content([img, prompt]).text
-    speak(yanit)
-
-
-# --- Mikrofon akışı ---
+# ======= TARAYICI MİKROFON - SES TO TEXT =======
 mic_html = """
 <div>
-  <button class="big-btn" id="start-record">🎤 Konuşmaya Başla</button>
-  <p id="mic-result" style="font-weight:bold; font-size:1.5em"></p>
+  <button class="big-button" id="start-record">🎤 Mikrofondan Konuş</button>
+  <p id="mic-result" style="font-weight:bold; font-size:1.2em"></p>
 </div>
 <script>
-const btn = document.getElementById('start-record');
-const result = document.getElementById('mic-result');
-if ('webkitSpeechRecognition' in window) {
-  let recognition = new webkitSpeechRecognition();
-  recognition.lang = "tr-TR"; recognition.continuous = false; recognition.interimResults = false;
-  btn.onclick = () => { recognition.start(); btn.innerText = "Dinleniyor..."; };
-  recognition.onresult = (e) => {
-    let text = e.results[0][0].transcript;
-    result.innerText = text;
-    window.parent.postMessage({isStreamlitMessage: true, type: "streamlit:setComponentValue", data: text}, "*");
-    btn.innerText = "🎤 Konuşmaya Başla";
-  };
-  recognition.onerror = (e) => { result.innerText = "Hata: " + e.error; btn.innerText = "🎤 Konuşmaya Başla"; };
-  recognition.onstart = () => {
-    // Mikrofon başladığında flag'i Streamlit'e gönder
-    window.parent.postMessage({isStreamlitMessage: true, type: "streamlit:setComponentValue", data: 'mic_started'}, "*");
+  const btn = document.getElementById('start-record');
+  const result = document.getElementById('mic-result');
+  let recognition;
+  if ('webkitSpeechRecognition' in window) {
+    recognition = new webkitSpeechRecognition();
+    recognition.lang = "tr-TR";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    btn.onclick = () => {
+      recognition.start();
+      btn.innerText = "Dinleniyor...";
+    };
+
+    recognition.onresult = (e) => {
+      let text = e.results[0][0].transcript;
+      result.innerText = text;
+      // Streamlit yazılı inputa otomatik aktarım için:
+      window.parent.postMessage({isStreamlitMessage: true, type: "streamlit:setComponentValue", data: text}, "*");
+      btn.innerText = "🎤 Mikrofondan Konuş";
+    };
+
+    recognition.onerror = (e) => {
+      result.innerText = "Hata: " + e.error;
+      btn.innerText = "🎤 Mikrofondan Konuş";
+    };
+  } else {
+    result.innerText = "Tarayıcı mikrofon desteği yok!";
+    btn.disabled = true;
   }
-else {
-  result.innerText = "Tarayıcı mikrofon desteği yok!";
-  btn.disabled = false;
-}
 </script>
 """
-st.components.v1.html(mic_html, height=230)
 
-# `streamlit:setComponentValue` mesajını yakala
-mic_data = st.session_state.get("component_value")
+mic_text = st.components.v1.html(mic_html, height=200)
 
 if mic_data == 'mic_started':
     # Sadece mikrofon başladıysa flag'i ayarla
@@ -92,17 +89,25 @@ elif mic_data:
     # Mikrofon verisi geldiyse hem prompt'u ayarla, hem de flag'i true yap
     st.session_state["mic_prompt"] = mic_data
     mic_flag = True
-```
 
-**Değişikliklerin Açıklaması:**
 
-*   **`mic_flag` Başlangıç Değeri:** `mic_flag = False` olarak ayarlandı. Program ilk başladığında mikrofonun kullanılmadığını belirtmek için bu önemlidir.
-*   **`mic_flag` Doğru Kullanımı:**
-    *   `if mic_flag == 1;` yerine `if mic_flag:` kullanıldı. Python'da boolean değerleri doğrudan kontrol etmek daha yaygındır.
-    *   `else;` silindi. Python'da `else` ifadesi `if` bloğunun hemen altında olmalıdır.
-*   **`st.session_state` Temizliği:**
-    *   `st.session_state["step"]` ve  `st.session_state["component_value"]`  değişkenlerine artık gerek kalmadığı için kaldırıldı.
-*   **Prompt Seçimi:** Prompt seçimi daha anlaşılır hale getirildi:
+# ======= UI =======
+# Kamera seçimi (Mobil için)
+kamera_secimi = st.radio("Kamera Seçimi:", ("Arka Kamera", "Ön Kamera"))
 
-    ```python
+# Resim çekme butonu
+captured_image = st.camera_input("2. Resim Çek",key="kalici_resim")
+if captured_image:
+    son_cekilen_resim = Image.open(captured_image)
+    st.image(captured_image, caption="Çekilen Resim", use_column_width=True)
+#    prompt = "Bu resimde neler görüyorsun anlat."
+    speak("Modelden yanıt bekleniyor...")
     prompt = st.session_state["mic_prompt"] if mic_flag else "Bu resimde neler var?"
+    yanit = model.generate_content([img, prompt]).text
+    speak(yanit)
+
+
+col1, col2 = st.columns([2,1])
+with col1:
+    st.markdown("Mikrofondan aldığınız metin otomatik buraya gelir.")
+
