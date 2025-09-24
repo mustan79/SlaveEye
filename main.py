@@ -1,5 +1,4 @@
 import streamlit as st
-#from streamlit_camera_input_live import camera_input_live
 from PIL import Image
 import google.generativeai as genai
 
@@ -31,37 +30,26 @@ def speak(text):
     </script>"""
     st.components.v1.html(speak_html, height=0)
 
-if "step" not in st.session_state:
-    st.session_state["step"] = None
 if "mic_prompt" not in st.session_state:
     st.session_state["mic_prompt"] = None
-if "component_value" not in st.session_state:
-    st.session_state["component_value"] = None
-mic_flag = 0
-
+#if "component_value" not in st.session_state:
+#    st.session_state["component_value"] = None # Artık gerekli değil
+mic_flag = False # Başlangıçta False olmalı
 
 resim = st.camera_input("Kamera ile fotoğraf çek")
+
 if resim:
     # Resmi PIL Image objesine çevir
     img = Image.open(resim)
     speak("Modelden yanıt bekleniyor...")
-    if mic_flag ==1;
-        prompt = st.session_state["mic_prompt"]
-        st.session_state["step"] = None
-        st.session_state["mic_prompt"] = None
-    else;
-        prompt = "Bu resimde neler var?"
+
+    prompt = st.session_state["mic_prompt"] if mic_flag else "Bu resimde neler var?"
 
     yanit = model.generate_content([img, prompt]).text
     speak(yanit)
-#    st.stop()
-
 
 
 # --- Mikrofon akışı ---
-st.session_state["mic_prompt"] = None
-st.session_state["component_value"] = None
-
 mic_html = """
 <div>
   <button class="big-btn" id="start-record">🎤 Konuşmaya Başla</button>
@@ -81,6 +69,10 @@ if ('webkitSpeechRecognition' in window) {
     btn.innerText = "🎤 Konuşmaya Başla";
   };
   recognition.onerror = (e) => { result.innerText = "Hata: " + e.error; btn.innerText = "🎤 Konuşmaya Başla"; };
+  recognition.onstart = () => {
+    // Mikrofon başladığında flag'i Streamlit'e gönder
+    window.parent.postMessage({isStreamlitMessage: true, type: "streamlit:setComponentValue", data: 'mic_started'}, "*");
+  }
 else {
   result.innerText = "Tarayıcı mikrofon desteği yok!";
   btn.disabled = false;
@@ -88,10 +80,29 @@ else {
 </script>
 """
 st.components.v1.html(mic_html, height=230)
-mic_value = st.session_state.get("component_value")
-if mic_value:
-    st.session_state["mic_prompt"] = mic_value
-    mic_flag = 1
 
+# `streamlit:setComponentValue` mesajını yakala
+mic_data = st.session_state.get("component_value")
 
-#
+if mic_data == 'mic_started':
+    # Sadece mikrofon başladıysa flag'i ayarla
+    mic_flag = True
+
+elif mic_data:
+    # Mikrofon verisi geldiyse hem prompt'u ayarla, hem de flag'i true yap
+    st.session_state["mic_prompt"] = mic_data
+    mic_flag = True
+```
+
+**Değişikliklerin Açıklaması:**
+
+*   **`mic_flag` Başlangıç Değeri:** `mic_flag = False` olarak ayarlandı. Program ilk başladığında mikrofonun kullanılmadığını belirtmek için bu önemlidir.
+*   **`mic_flag` Doğru Kullanımı:**
+    *   `if mic_flag == 1;` yerine `if mic_flag:` kullanıldı. Python'da boolean değerleri doğrudan kontrol etmek daha yaygındır.
+    *   `else;` silindi. Python'da `else` ifadesi `if` bloğunun hemen altında olmalıdır.
+*   **`st.session_state` Temizliği:**
+    *   `st.session_state["step"]` ve  `st.session_state["component_value"]`  değişkenlerine artık gerek kalmadığı için kaldırıldı.
+*   **Prompt Seçimi:** Prompt seçimi daha anlaşılır hale getirildi:
+
+    ```python
+    prompt = st.session_state["mic_prompt"] if mic_flag else "Bu resimde neler var?"
