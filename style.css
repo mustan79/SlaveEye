@@ -1,27 +1,194 @@
+/* Genel sayfa stili */
+.stApp {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+}
+
+.main {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 20px;
+    padding: 30px;
+    margin: 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+/* Başlık stili */
+h1 {
+    text-align: center;
+    color: #333;
+    margin-bottom: 30px;
+    font-family: 'Arial', sans-serif;
+}
+
+/* Buton konteynerleri */
+.button-container {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    margin: 30px 0;
+}
+
+/* Büyük butonlar */
 .big-button {
-  font-size: 1.5em;
-  padding: 1em 2em;
-  border-radius: 12px;
-  margin: 1em 0;
-  background-color: #4F8BF9;
-  color: white;
-  border: none;
-  cursor: pointer;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    color: white;
+    padding: 20px 40px;
+    font-size: 24px;
+    border-radius: 15px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin: 10px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
 }
+
+.big-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+}
+
 .big-button:active {
-  background-color: #3461b6;
+    transform: translateY(0);
 }
-.big-textarea {
-  font-size: 1.2em;
-  padding: 1em;
-  border-radius: 10px;
-  width: 100%;
+
+/* Kamera konteyneri */
+.camera-container {
+    text-align: center;
+    margin: 20px 0;
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 15px;
+    border: 2px dashed #667eea;
 }
-.stTextInput input {
-  font-size: 1.2em;
-  padding: 0.8em;
+
+/* Streamlit kamera input özelleştirme */
+.stCameraInput {
+    border: 3px solid #667eea;
+    border-radius: 15px;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
 }
-.stTextArea textarea {
-  font-size: 1.2em;
-  padding: 1em;
+
+.stCameraInput > div {
+    border-radius: 15px;
+}
+
+/* Mikrofon sonucu */
+#mic-result {
+    font-weight: bold;
+    font-size: 1.2em;
+    margin-top: 10px;
+    color: #333;
+    padding: 10px;
+    background: rgba(102, 126, 234, 0.1);
+    border-radius: 10px;
+    border-left: 4px solid #667eea;
+}
+
+/* Başarı mesajları */
+.stSuccess {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    border: none;
+    border-radius: 10px;
+    color: white;
+    font-weight: bold;
+}
+
+/* Hata mesajları */
+.stError {
+    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+    border: none;
+    border-radius: 10px;
+    color: white;
+    font-weight: bold;
+}
+
+/* Bilgi alanı */
+.info-section {
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 15px;
+    padding: 20px;
+    margin: 20px 0;
+    border-left: 5px solid #667eea;
+}
+
+/* Responsive tasarım */
+@media (max-width: 768px) {
+    .button-container {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .big-button {
+        width: 80%;
+        font-size: 20px;
+        padding: 15px 30px;
+    }
+    
+    .main {
+        margin: 10px;
+        padding: 20px;
+    }
+}
+
+/* Animasyonlar */
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.big-button:hover {
+    animation: pulse 0.6s ease-in-out;
+}
+
+/* Sütun düzeni */
+.stColumn {
+    padding: 20px;
+}
+
+/* Slider ve input özelleştirmeleri */
+.stSelectbox > div > div {
+    border-radius: 10px;
+}
+
+.stTextInput > div > div > input {
+    border-radius: 10px;
+    border: 2px solid #667eea;
+}
+
+/* MarkDown özelleştirmeleri */
+.stMarkdown {
+    line-height: 1.6;
+}
+
+.stMarkdown h3 {
+    color: #667eea;
+    border-bottom: 2px solid #667eea;
+    padding-bottom: 10px;
+}
+
+.stMarkdown ul {
+    background: rgba(102, 126, 234, 0.05);
+    padding: 15px;
+    border-radius: 10px;
+    border-left: 4px solid #667eea;
+}
+
+.stMarkdown li {
+    margin: 8px 0;
+    font-weight: 500;
+}
+
+/* Separator */
+hr {
+    border: none;
+    height: 3px;
+    background: linear-gradient(90deg, #667eea, #764ba2);
+    margin: 30px 0;
+    border-radius: 10px;
 }
