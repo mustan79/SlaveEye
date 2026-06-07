@@ -34,8 +34,6 @@ google-auth==2.38.0
 google-auth-httplib2==0.2.0
 google-crc32c==1.6.0
 google-genai==1.8.0
-google-generativeai==0.8.4
-googleapis-common-protos==1.66.0
 grpcio==1.70.0
 grpcio-status==1.70.0
 gTTS==2.5.4
@@ -60,6 +58,7 @@ mpmath==1.3.0
 narwhals==1.25.0
 networkx==3.4.2
 numpy==2.1.1
+ollama
 opencv-python==4.11.0.86
 openpyxl==3.1.5
 packaging==24.2

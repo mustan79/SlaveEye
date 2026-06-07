@@ -1,13 +1,14 @@
 import streamlit as st
-import google.generativeai as genai
+from ollama import Client  # Ollama SDK import edildi
 import os
 from dotenv import load_dotenv
 from PIL import Image
 import base64
+import io
 
 # Sayfa konfigürasyonu
 st.set_page_config(
-    page_title="Akıllı Asistan",
+    page_title="Akıllı Asistan (Ollama Cloud)",
     page_icon="🤖",
     layout="centered"
 )
@@ -16,18 +17,20 @@ st.set_page_config(
 with open("style.css") as f:
     st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
-st.title("🤖 Akıllı Asistan")
+st.title("🤖 Akıllı Asistan (Ollama)")
 
 # Çevresel değişkenleri yükle
 load_dotenv()
-google_api_key = st.secrets.get("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
-if not google_api_key:
-    st.error("Google API Key bulunamadı. Lütfen .env dosyanızı kontrol edin.")
+ollama_api_key = st.secrets.get("OLLAMA_API_KEY") or os.getenv("OLLAMA_API_KEY")
+if not ollama_api_key:
+    st.error("Ollama API Key bulunamadı. Lütfen .env veya Streamlit Secrets kontrol edin.")
     st.stop()
 
-# Gemini API yapılandırması
-genai.configure(api_key=google_api_key)
-model = genai.GenerativeModel('gemini-2.5-flash')
+# Ollama Bulut İstemci (Client) Yapılandırması
+client = Client(
+    host="https://ollama.com",  # Sizin belirttiğiniz bulut adresi
+    headers={"Authorization": f"Bearer {ollama_api_key}"}
+)
 
 # Sesli yanıt fonksiyonu
 def speak(text):
@@ -49,9 +52,9 @@ if "mic_text" not in st.session_state:
 
 # Mikrofon HTML komponenti
 mic_html = """
-<div style="text-align: center; margin: 20px;">
+<div style="text-align: center; margin: 30px;">
   <button class="big-button" id="start-record" onclick="startMic()">🎤 Mikrofon</button>
-  <div id="mic-result" style="font-weight: bold; font-size: 1.2em; margin-top: 10px; color: #333;"></div>
+  <div id="mic-result" style="font-weight: bold; font-size: 4em; margin-top: 30px; color: #333;"></div>
 </div>
 <script>
 function startMic() {
@@ -103,7 +106,7 @@ function startMic() {
 """
 
 # Mikrofon bileşeni
-mic_result = st.components.v1.html(mic_html, height=150)
+mic_result = st.components.v1.html(mic_html, height=250)
 
 # Mikrofon verisini session state'e kaydet
 if isinstance(mic_result, str) and mic_result.strip():
@@ -116,7 +119,7 @@ st.markdown("""
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border: none;
   color: white;
-  padding: 20px 40px;
+  padding: 30px 50px;
   font-size: 24px;
   border-radius: 15px;
   cursor: pointer;
@@ -127,7 +130,7 @@ st.markdown("""
 
 .big-button:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
 }
 
 .button-container {
@@ -139,7 +142,7 @@ st.markdown("""
 
 .camera-container {
   text-align: center;
-  margin: 20px 0;
+  margin: 30px 0;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -158,21 +161,35 @@ with col1:
     if camera_photo:
         st.session_state["captured_image"] = camera_photo
         if st.session_state["mic_text"]:
-            # Mikrofon girişi varsa onu kullan
             prompt = st.session_state["mic_text"]
             speak("Modelden yanıt bekleniyor...")
         else:
-            # Sabit prompt
             prompt = "Bu resimde gördüklerini detaylı olarak anlat."
             speak("Modelden yanıt bekleniyor...")
         
-        # Resmi AI'ya gönder
+        # Resmi aç ve Ollama için hazırla
         image = Image.open(st.session_state["captured_image"])
-        response = model.generate_content([image, prompt])
-        response_text = response.text
         
-        # Yanıtı seslendir
-        speak(response_text)
+        # PIL Image nesnesini Base64 stringine dönüştürme işlemi
+        buffered = io.BytesIO()
+        image.save(buffered, format="JPEG")
+        img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+        
+        try:
+            # Ollama API çağrısı
+            response = client.generate(
+                model="gemma4:31b-cloud",
+                prompt=prompt,
+                images=[img_base64]  # Resim base64 listesi olarak gönderildi
+            )
+            response_text = response['response']
+            
+            # Yanıtı ekrana yazdır ve seslendir
+            st.write(response_text)
+            speak(response_text)
+            
+        except Exception as e:
+            st.error(f"Ollama API hatası oluştu: {e}")
         
         # Temizle
         st.session_state["mic_text"] = ""
@@ -194,3 +211,5 @@ st.markdown("💡 **İpuçları:**")
 st.markdown("- Resim çek butonuna bastığınızda kamera açılacak")
 st.markdown("- Mikrofon kullanmak için önce mikrofon butonuna basın")
 st.markdown("- Tüm yanıtlar sesli olarak okunacak")
+
+
