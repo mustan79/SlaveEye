@@ -1,40 +1,32 @@
 import streamlit as st
-from ollama import Client  # Ollama SDK import edildi
+from ollama import Client
 import os
 from dotenv import load_dotenv
 from PIL import Image
-import base64
 import io
+import base64
 
 # Sayfa konfigürasyonu
 st.set_page_config(
-    page_title="Akıllı Asistan (Ollama Cloud)",
+    page_title="Sesli Asistan",
     page_icon="🤖",
     layout="centered"
 )
-
-# CSS yükle
-with open("style.css") as f:
-    st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
-
-st.title("🤖 Akıllı Asistan (Ollama)")
 
 # Çevresel değişkenleri yükle
 load_dotenv()
 ollama_api_key = st.secrets.get("OLLAMA_API_KEY") or os.getenv("OLLAMA_API_KEY")
 if not ollama_api_key:
-    st.error("Ollama API Key bulunamadı. Lütfen .env veya Streamlit Secrets kontrol edin.")
+    st.error("Ollama API Key bulunamadı.")
     st.stop()
 
-# Ollama Bulut İstemci (Client) Yapılandırması
 client = Client(
-    host="https://ollama.com",  # Sizin belirttiğiniz bulut adresi
+    host="https://ollama.com",
     headers={"Authorization": f"Bearer {ollama_api_key}"}
 )
 
-# Sesli yanıt fonksiyonu
 def speak(text):
-    """Metni sesli olarak okuma"""
+    """Metni sesli okuma tetikleyicisi"""
     speak_html = f"""
     <script>
     var msg = new SpeechSynthesisUtterance({text!r});
@@ -44,25 +36,100 @@ def speak(text):
     </script>"""
     st.components.v1.html(speak_html, height=0)
 
-# Session state başlatma
-if "captured_image" not in st.session_state:
-    st.session_state["captured_image"] = None
+# Değişkenleri session state üzerinde tutuyoruz
 if "mic_text" not in st.session_state:
     st.session_state["mic_text"] = ""
+if "auto_trigger" not in st.session_state:
+    st.session_state["auto_trigger"] = False
 
-# Mikrofon HTML komponenti
-mic_html = """
-<div style="text-align: center; margin: 30px;">
-  <button class="big-button" id="start-record" onclick="startMic()">🎤 Mikrofon</button>
-  <div id="mic-result" style="font-weight: bold; font-size: 4em; margin-top: 30px; color: #333;"></div>
+# --- ERİŞİLEBİLİRLİK VE TASARIM CSS AYARLARI ---
+st.markdown("""
+<style>
+/* Arka planı koyulaştırıp butonları öne çıkarma */
+.main {
+    background-color: #f5f7fb;
+}
+
+/* Devasa, erişilebilir buton tasarımları */
+.custom-btn {
+    border: none;
+    color: white;
+    padding: 30px 20px;
+    font-size: 24px;
+    font-weight: bold;
+    border-radius: 20px;
+    cursor: pointer;
+    width: 100%;
+    margin-bottom: 20px;
+    text-align: center;
+    display: block;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+    transition: all 0.2s ease;
+}
+
+.btn-camera {
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+}
+
+.btn-mic {
+    background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%);
+}
+
+.custom-btn:active {
+    transform: scale(0.96);
+}
+
+/* KAMERAYI EN ALTTA KÜÇÜCÜK TUTMA VE ERİŞİLMEZ YAPMA HİLESİ */
+/* Görsel olarak alt köşede çok az yer kaplayacak ama JS tarafından tıklanabilecek */
+div[data-testid="stCameraInput"] {
+    position: fixed;
+    bottom: 5px;
+    right: 5px;
+    width: 140px !important;
+    height: 100px !important;
+    z-index: 9999;
+    opacity: 0.4;
+    transform: scale(0.7);
+}
+div[data-testid="stCameraInput"] label {
+    display: none !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.title("🤖 Gözsüz Akıllı Asistan")
+
+# --- JAVASCRIPT KÖPRÜSÜ (MİKROFON VE OTOMASYON) ---
+# Hem mikrofonu yönetir hem de ses bitince aşağıdaki gizli kameranın deklanşörüne basar.
+master_js_html = """
+<div style="width: 100%;">
+  <button class="custom-btn btn-mic" id="mic-btn" onclick="runMicWorkflow()">🎤 MİKROFONU AÇ (KONUŞ)</button>
+  <button class="custom-btn btn-camera" id="cam-btn" onclick="clickHiddenCamera()">📸 SADECE RESİM ÇEK</button>
+  <p id="status-text" style="text-align: center; color: #555; font-size: 16px; font-weight: bold; margin-top: 10px;">Durum: Hazır</p>
 </div>
+
 <script>
-function startMic() {
-  const btn = document.getElementById('start-record');
-  const result = document.getElementById('mic-result');
+function clickHiddenCamera() {
+    const status = document.getElementById('status-text');
+    status.innerText = "Kamera Tetikleniyor...";
+    
+    // Streamlit'in kamera butonunu bulup tıklatıyoruz
+    setTimeout(() => {
+        const camBtn = window.parent.document.querySelector('div[data-testid="stCameraInput"] button');
+        if (camBtn) {
+            camBtn.click();
+        } else {
+            status.innerText = "Hata: Kamera butonu bulunamadı!";
+        }
+    }, 500);
+}
+
+function runMicWorkflow() {
+  const micBtn = document.getElementById('mic-btn');
+  const status = document.getElementById('status-text');
   
   if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-    result.innerText = "Tarayıcı mikrofon desteği yok!";
+    status.innerText = "Tarayıcıda mikrofon desteği yok!";
     return;
   }
   
@@ -74,142 +141,98 @@ function startMic() {
   recognition.interimResults = false;
 
   recognition.onstart = function() {
-    btn.innerText = "🔊 Dinleniyor...";
-    result.innerText = "Mikrofon aktif...";
+    micBtn.style.background = "linear-gradient(135deg, #f857a6 0%, #ff5858 100%)";
+    micBtn.innerText = "🔊 DİNLENİYOR...";
+    status.innerText = "Konuşun, bitince otomatik fotoğraf çekilecek...";
   };
 
   recognition.onresult = function(event) {
     const text = event.results[0][0].transcript;
-    result.innerText = "Anladığım: " + text;
+    status.innerText = "Söylenen: " + text;
     
-    // Streamlit'e metni gönder
-    window.parent.postMessage({
-      type: "streamlit:setComponentValue",
-      data: text
-    }, "*");
+    // 1. Adım: Metni Streamlit text_input alanına yaz ve eşitle
+    const inputs = window.parent.document.querySelectorAll('input[type="text"]');
+    if(inputs.length > 0) {
+        inputs[0].value = text;
+        inputs[0].dispatchEvent(new Event('input', { bubbles: true }));
+    }
     
-    btn.innerText = "🎤 Mikrofon";
+    // 2. Adım: Zincirleme Reaksiyon - Otomatik olarak kamerayı tetikle
+    status.innerText = "Ses alındı! Resim otomatik çekiliyor...";
+    setTimeout(() => {
+        clickHiddenCamera();
+    }, 800);
   };
 
   recognition.onerror = function(event) {
-    result.innerText = "Hata: " + event.error;
-    btn.innerText = "🎤 Mikrofon";
+    status.innerText = "Hata: " + event.error;
+    resetUi();
   };
 
   recognition.onend = function() {
-    btn.innerText = "🎤 Mikrofon";
+    resetUi();
   };
+
+  function resetUi() {
+    micBtn.style.background = "linear-gradient(135deg, #00c6ff 0%, #0072ff 100%)";
+    micBtn.innerText = "🎤 MİKROFONU AÇ (KONUŞ)";
+  }
 
   recognition.start();
 }
 </script>
 """
 
-# Mikrofon bileşeni
-mic_result = st.components.v1.html(mic_html, height=250)
+# HTML Buton bloğunu en üste gömüyoruz
+st.components.v1.html(master_js_html, height=240)
 
-# Mikrofon verisini session state'e kaydet
-if isinstance(mic_result, str) and mic_result.strip():
-    st.session_state["mic_text"] = mic_result
+# Mikrofondan gelen veriyi yakalayan ara görünmez kutu (Sadece veri aktarımı için)
+text_input_val = st.text_input("Gelen Komut:", key="hidden_voice_input", label_visibility="collapsed")
 
-# Butonlar için CSS
-st.markdown("""
-<style>
-.big-button {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border: none;
-  color: white;
-  padding: 30px 50px;
-  font-size: 24px;
-  border-radius: 15px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  margin: 10px;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-}
+if text_input_val:
+    st.session_state["mic_text"] = text_input_val
 
-.big-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-}
+# Mikrofon senaryosunda ekrana söylenen cümleyi yazdırma kuralı
+if st.session_state["mic_text"]:
+    st.info(f"🎤 Algılanan Sorunuz: **{st.session_state['mic_text']}**")
 
-.button-container {
-  display: flex;
-  justify-content: center;
-  gap: 30px;
-  margin: 30px 0;
-}
+# Arka planda duran (küçültülmüş) Streamlit kamera bileşeni
+camera_photo = st.camera_input("Kamera", key="hidden_camera")
 
-.camera-container {
-  text-align: center;
-  margin: 30px 0;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# Ana butonlar
-col1, col2 = st.columns([1, 1])
-
-with col1:
-    # Resim çek butonu
-    camera_photo = st.camera_input(
-        "📸 Resim Çek",
-        key="photo_capture",
-        help="Bu butona bastığınızda kamera aktif olacak ve arkaplanda çalışacak"
-    )
-    
-    if camera_photo:
-        st.session_state["captured_image"] = camera_photo
-        if st.session_state["mic_text"]:
-            prompt = st.session_state["mic_text"]
-            speak("Modelden yanıt bekleniyor...")
-        else:
-            prompt = "Bu resimde gördüklerini detaylı olarak anlat."
-            speak("Modelden yanıt bekleniyor...")
+# --- LLM VE ANALİZ SÜRECİ ---
+if camera_photo:
+    # 1. mi yoksa 2. senaryo mu aktif kontrol et
+    if st.session_state["mic_text"].strip() != "":
+        # 2. Senaryo: Kullanıcının kendi cümlesi
+        prompt = st.session_state["mic_text"]
+    else:
+        # 1. Senaryo: Sadece resim çekildi, sabit prompt devrede
+        prompt = "Bu resimde ne görüyorsun? Detaylıca Türkçe açıkla."
         
-        # Resmi aç ve Ollama için hazırla
-        image = Image.open(st.session_state["captured_image"])
-        
-        # PIL Image nesnesini Base64 stringine dönüştürme işlemi
-        buffered = io.BytesIO()
-        image.save(buffered, format="JPEG")
-        img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
-        
+    with st.spinner("Asistan düşünüyor..."):
         try:
-            # Ollama API çağrısı
+            # Resmi base64 formatına çevir
+            image = Image.open(camera_photo)
+            buffered = io.BytesIO()
+            image.save(buffered, format="JPEG")
+            img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+            
+            # Ollama Cloud API Çağrısı
             response = client.generate(
                 model="gemma4:31b-cloud",
                 prompt=prompt,
-                images=[img_base64]  # Resim base64 listesi olarak gönderildi
+                images=[img_base64]
             )
-            response_text = response['response']
             
-            # Yanıtı ekrana yazdır ve seslendir
-            st.write(response_text)
+            response_text = response.response
+            
+            # SADECE SESLİ YANIT (İstediğin gibi metin çıktısı vermiyor, direkt konuşuyor)
             speak(response_text)
             
         except Exception as e:
-            st.error(f"Ollama API hatası oluştu: {e}")
-        
-        # Temizle
-        st.session_state["mic_text"] = ""
-
-with col2:
-    # Mikrofon kullanım talimatları
-    st.markdown("### 🎤 Mikrofon Kullanımı:")
-    st.markdown("1. Mikrofon butonuna basın")
-    st.markdown("2. Ne istediğinizi söyleyin")
-    st.markdown("3. Kamera otomatik fotoğraf çekecek")
-    st.markdown("4. İsteğinizle ilgili yanıt gelecek")
-    
-    if st.session_state["mic_text"]:
-        st.success(f"Son mikrofon girişi: **{st.session_state['mic_text']}**")
-
-# Bilgi alanı
-st.markdown("---")
-st.markdown("💡 **İpuçları:**")
-st.markdown("- Resim çek butonuna bastığınızda kamera açılacak")
-st.markdown("- Mikrofon kullanmak için önce mikrofon butonuna basın")
-st.markdown("- Tüm yanıtlar sesli olarak okunacak")
+            speak("Özür dilerim, bağlantı sırasında bir hata oluştu.")
+            
+    # Zincirleme akış bittiği için hafızayı temizle (Arayüzü sıfırla)
+    st.session_state["mic_text"] = ""
 
 
